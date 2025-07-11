@@ -37,6 +37,7 @@ fun CalculatorScreen(
     var expression by remember { mutableStateOf("") }
     var result by remember { mutableStateOf("") }
     val history = remember { mutableStateListOf<Pair<String, String>>() }
+    var memory by remember { mutableStateOf(0.0) }
 
     val buttonSize = 80.dp
     val buttonSpacing = 6.dp
@@ -141,6 +142,7 @@ fun CalculatorScreen(
             listOf("7", "8", "9", "×"),
             listOf("4", "5", "6", "-"),
             listOf("1", "2", "3", "+"),
+            listOf("M+", "M-", "MR", "MC"),
             listOf(".", "0", "=", "")
         )
 
@@ -158,6 +160,7 @@ fun CalculatorScreen(
                                 "=" -> listOf(Color(0xFF00C853), Color(0xFF64DD17))
                                 "AC" -> listOf(Color(0xFFFF3D00), Color(0xFFFF6E40))
                                 "C", "⌫" -> listOf(Color(0xFF2962FF), Color(0xFF448AFF))
+                                "M+", "M-", "MR", "MC" -> listOf(Color(0xFF5D4037), Color(0xFF8D6E63))
                                 else -> listOf(Color(0xFF2E2E2E), Color(0xFF424242))
                             }
                         ) {
@@ -181,6 +184,16 @@ fun CalculatorScreen(
                                 "⌫" -> if (expression.isNotEmpty()) {
                                     expression = expression.dropLast(1)
                                 }
+                                "M+" -> {
+                                    val value = result.toDoubleOrNull()
+                                    if (value != null) memory += value
+                                }
+                                "M-" -> {
+                                    val value = result.toDoubleOrNull()
+                                    if (value != null) memory -= value
+                                }
+                                "MR" -> expression += memory.toString()
+                                "MC" -> memory = 0.0
                                 else -> expression += label
                             }
                         }

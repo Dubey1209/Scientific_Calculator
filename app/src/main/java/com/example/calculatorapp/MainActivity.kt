@@ -15,7 +15,7 @@ class MainActivity : ComponentActivity() {
 
             CalculatorAppTheme(darkTheme = isDarkTheme) {
                 Surface {
-                    CalculatorScreen(
+                    MainCalculatorApp(
                         isDarkTheme = isDarkTheme,
                         onToggleTheme = { isDarkTheme = !isDarkTheme }
                     )

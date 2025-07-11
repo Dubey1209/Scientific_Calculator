@@ -13,6 +13,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.DarkMode
+import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.WbSunny
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -27,17 +28,66 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.navigation.NavController
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
+import androidx.navigation.compose.rememberNavController
+import java.util.Locale
 import kotlin.math.*
+
+val sharedHistory = mutableStateListOf<Pair<String, String>>()
+
+@Composable
+fun MainCalculatorApp(isDarkTheme: Boolean, onToggleTheme: () -> Unit) {
+    val navController = rememberNavController()
+
+    Scaffold(
+        bottomBar = {
+            BottomNavigationBar(navController)
+        }
+    ) { paddingValues ->
+        NavHost(
+            navController = navController,
+            startDestination = "calculator",
+            modifier = Modifier.padding(paddingValues)
+        ) {
+            composable("calculator") {
+                CalculatorScreen(isDarkTheme, onToggleTheme, navController)
+            }
+            composable("history") {
+                HistoryScreen()
+            }
+        }
+    }
+}
+
+@Composable
+fun BottomNavigationBar(navController: NavController) {
+    val items = listOf("calculator" to Icons.Default.WbSunny, "history" to Icons.Default.History)
+    val currentRoute = navController.currentBackStackEntryAsState().value?.destination?.route
+
+    NavigationBar {
+        items.forEach { (route, icon) ->
+            NavigationBarItem(
+                icon = { Icon(imageVector = icon, contentDescription = route) },
+                selected = currentRoute == route,
+                onClick = { navController.navigate(route) },
+                label = { Text(route.replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.getDefault()) else it.toString() }) }
+            )
+        }
+    }
+}
 
 @Composable
 fun CalculatorScreen(
     isDarkTheme: Boolean,
-    onToggleTheme: () -> Unit
+    onToggleTheme: () -> Unit,
+    navController: NavController
 ) {
     var expression by remember { mutableStateOf("") }
     var result by remember { mutableStateOf("") }
-    val history = remember { mutableStateListOf<Pair<String, String>>() }
-    var memory by remember { mutableStateOf(0.0) }
+    var memory by remember { mutableDoubleStateOf(0.0) }
 
     val buttonSize = 80.dp
     val buttonSpacing = 6.dp
@@ -55,7 +105,6 @@ fun CalculatorScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .verticalScroll(rememberScrollState())
             .background(gradientBackground)
             .padding(12.dp)
     ) {
@@ -104,105 +153,106 @@ fun CalculatorScreen(
 
         Spacer(modifier = Modifier.height(12.dp))
 
-        Text(
-            text = "History",
-            color = Color.White,
-            fontSize = 18.sp,
-            fontWeight = FontWeight.SemiBold,
-            modifier = Modifier.padding(start = 4.dp, bottom = 4.dp)
-        )
+        Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+            val buttons = listOf(
+                listOf("AC", "C", "⌫", "÷"),
+                listOf("sin", "cos", "tan", "log"),
+                listOf("π", "e", "√", "^"),
+                listOf("7", "8", "9", "×"),
+                listOf("4", "5", "6", "-"),
+                listOf("1", "2", "3", "+"),
+                listOf("M+", "M-", "MR", "MC"),
+                listOf(".", "0", "=", "")
+            )
 
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxHeight(0.3f)
-                .padding(bottom = 8.dp)
-        ) {
-            items(history.reversed()) { (exp, res) ->
-                Text(
-                    text = "$exp = $res",
-                    color = Color.LightGray,
-                    fontSize = 16.sp,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable {
-                            expression = exp
-                            result = res
+            buttons.forEach { row ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceEvenly
+                ) {
+                    row.forEach { label ->
+                        if (label.isNotEmpty()) {
+                            CalculatorButton(
+                                label = label,
+                                size = buttonSize,
+                                gradient = when (label) {
+                                    "=" -> listOf(Color(0xFF00C853), Color(0xFF64DD17))
+                                    "AC" -> listOf(Color(0xFFFF3D00), Color(0xFFFF6E40))
+                                    "C", "⌫" -> listOf(Color(0xFF2962FF), Color(0xFF448AFF))
+                                    "M+", "M-", "MR", "MC" -> listOf(Color(0xFF5D4037), Color(0xFF8D6E63))
+                                    else -> listOf(Color(0xFF2E2E2E), Color(0xFF424242))
+                                }
+                            ) {
+                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                                    vibrator?.vibrate(
+                                        VibrationEffect.createOneShot(
+                                            40,
+                                            VibrationEffect.DEFAULT_AMPLITUDE
+                                        )
+                                    )
+                                } else {
+                                    @Suppress("DEPRECATION")
+                                    vibrator?.vibrate(40)
+                                }
+
+                                when (label) {
+                                    "=" -> {
+                                        result = ExpressionUtils.evaluateExpression(expression)
+                                        sharedHistory.add(Pair(expression, result))
+                                    }
+
+                                    "AC" -> {
+                                        expression = ""
+                                        result = ""
+                                    }
+
+                                    "C" -> expression = ""
+
+                                    "⌫" -> if (expression.isNotEmpty()) {
+                                        expression = expression.dropLast(1)
+                                    }
+
+                                    "M+" -> {
+                                        val value = result.toDoubleOrNull()
+                                        if (value != null) memory += value
+                                    }
+
+                                    "M-" -> {
+                                        val value = result.toDoubleOrNull()
+                                        if (value != null) memory -= value
+                                    }
+
+                                    "MR" -> expression += memory.toString()
+
+                                    "MC" -> memory = 0.0
+
+                                    else -> expression += label
+                                }
+                            }
+                        } else {
+                            Spacer(modifier = Modifier.size(buttonSize + buttonSpacing))
                         }
-                        .padding(vertical = 4.dp, horizontal = 8.dp)
-                )
-            }
-        }
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        val buttons = listOf(
-            listOf("AC", "C", "⌫", "÷"),
-            listOf("sin", "cos", "tan", "log"),
-            listOf("π", "e", "√", "^"),
-            listOf("7", "8", "9", "×"),
-            listOf("4", "5", "6", "-"),
-            listOf("1", "2", "3", "+"),
-            listOf("M+", "M-", "MR", "MC"),
-            listOf(".", "0", "=", "")
-        )
-
-        buttons.forEach { row ->
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceEvenly
-            ) {
-                row.forEach { label ->
-                    if (label.isNotEmpty()) {
-                        CalculatorButton(
-                            label = label,
-                            size = buttonSize,
-                            gradient = when (label) {
-                                "=" -> listOf(Color(0xFF00C853), Color(0xFF64DD17))
-                                "AC" -> listOf(Color(0xFFFF3D00), Color(0xFFFF6E40))
-                                "C", "⌫" -> listOf(Color(0xFF2962FF), Color(0xFF448AFF))
-                                "M+", "M-", "MR", "MC" -> listOf(Color(0xFF5D4037), Color(0xFF8D6E63))
-                                else -> listOf(Color(0xFF2E2E2E), Color(0xFF424242))
-                            }
-                        ) {
-                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                                vibrator?.vibrate(VibrationEffect.createOneShot(40, VibrationEffect.DEFAULT_AMPLITUDE))
-                            } else {
-                                @Suppress("DEPRECATION")
-                                vibrator?.vibrate(40)
-                            }
-
-                            when (label) {
-                                "=" -> {
-                                    result = ExpressionUtils.evaluateExpression(expression)
-                                    history.add(Pair(expression, result))
-                                }
-                                "AC" -> {
-                                    expression = ""
-                                    result = ""
-                                }
-                                "C" -> expression = ""
-                                "⌫" -> if (expression.isNotEmpty()) {
-                                    expression = expression.dropLast(1)
-                                }
-                                "M+" -> {
-                                    val value = result.toDoubleOrNull()
-                                    if (value != null) memory += value
-                                }
-                                "M-" -> {
-                                    val value = result.toDoubleOrNull()
-                                    if (value != null) memory -= value
-                                }
-                                "MR" -> expression += memory.toString()
-                                "MC" -> memory = 0.0
-                                else -> expression += label
-                            }
-                        }
-                    } else {
-                        Spacer(modifier = Modifier.size(buttonSize + buttonSpacing))
                     }
                 }
+                Spacer(modifier = Modifier.height(6.dp))
             }
-            Spacer(modifier = Modifier.height(6.dp))
+        }
+    }
+}
+
+@Composable
+fun HistoryScreen() {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp)
+    ) {
+        Text("Calculation History", fontSize = 20.sp, fontWeight = FontWeight.Bold)
+        Spacer(modifier = Modifier.height(12.dp))
+        LazyColumn {
+            items(sharedHistory.reversed()) { (exp, res) ->
+                Text("$exp = $res", fontSize = 16.sp, modifier = Modifier.padding(4.dp))
+            }
         }
     }
 }

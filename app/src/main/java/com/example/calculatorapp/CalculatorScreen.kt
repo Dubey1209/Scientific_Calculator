@@ -6,6 +6,10 @@ import android.os.Vibrator
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.DarkMode
@@ -23,6 +27,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlin.math.*
 
 @Composable
 fun CalculatorScreen(
@@ -31,6 +36,7 @@ fun CalculatorScreen(
 ) {
     var expression by remember { mutableStateOf("") }
     var result by remember { mutableStateOf("") }
+    val history = remember { mutableStateListOf<Pair<String, String>>() }
 
     val buttonSize = 80.dp
     val buttonSpacing = 6.dp
@@ -48,10 +54,10 @@ fun CalculatorScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .verticalScroll(rememberScrollState())
             .background(gradientBackground)
             .padding(12.dp)
     ) {
-        // 🌙 Theme Toggle
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -67,7 +73,6 @@ fun CalculatorScreen(
             }
         }
 
-        // 🧮 Display Box
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -98,7 +103,37 @@ fun CalculatorScreen(
 
         Spacer(modifier = Modifier.height(12.dp))
 
-        // 🔢 Buttons Grid
+        Text(
+            text = "History",
+            color = Color.White,
+            fontSize = 18.sp,
+            fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.padding(start = 4.dp, bottom = 4.dp)
+        )
+
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxHeight(0.3f)
+                .padding(bottom = 8.dp)
+        ) {
+            items(history.reversed()) { (exp, res) ->
+                Text(
+                    text = "$exp = $res",
+                    color = Color.LightGray,
+                    fontSize = 16.sp,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable {
+                            expression = exp
+                            result = res
+                        }
+                        .padding(vertical = 4.dp, horizontal = 8.dp)
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
         val buttons = listOf(
             listOf("AC", "C", "⌫", "÷"),
             listOf("sin", "cos", "tan", "log"),
@@ -127,19 +162,17 @@ fun CalculatorScreen(
                             }
                         ) {
                             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                                vibrator?.vibrate(
-                                    VibrationEffect.createOneShot(
-                                        40,
-                                        VibrationEffect.DEFAULT_AMPLITUDE
-                                    )
-                                )
+                                vibrator?.vibrate(VibrationEffect.createOneShot(40, VibrationEffect.DEFAULT_AMPLITUDE))
                             } else {
                                 @Suppress("DEPRECATION")
                                 vibrator?.vibrate(40)
                             }
 
                             when (label) {
-                                "=" -> result = ExpressionUtils.evaluateExpression(expression)
+                                "=" -> {
+                                    result = ExpressionUtils.evaluateExpression(expression)
+                                    history.add(Pair(expression, result))
+                                }
                                 "AC" -> {
                                     expression = ""
                                     result = ""
